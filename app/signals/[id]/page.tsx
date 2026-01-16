@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Cookies from "js-cookie";
-import { Signal } from "../types";
-import { API_BASE_URL } from "../config";
-import Modal from "../components/Modal";
+import { Signal } from "../../types";
+import { API_BASE_URL } from "../../config";
+import Modal from "../../components/Modal";
+import AuthGuard from "../../components/AuthGuard";
+
+export default function SignalDetailsPage() {
+  return (
+    <AuthGuard>
+      <SignalDetailsContent />
+    </AuthGuard>
+  );
+}
 
 function SignalDetailsContent() {
+  const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const id = searchParams.get("id");
-
   const [signal, setSignal] = useState<Signal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +26,7 @@ function SignalDetailsContent() {
   const [token, setToken] = useState<string | undefined>();
   const [user, setUser] = useState<any>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const id = params?.id as string;
 
   // Modal state
   const [modalConfig, setModalConfig] = useState<{
@@ -44,12 +52,16 @@ function SignalDetailsContent() {
     const tokenFromCookie = Cookies.get("token");
     const userFromCookie = Cookies.get("user");
 
+    console.log("Reading cookies:", { tokenFromCookie, userFromCookie });
+
     if (userFromCookie) {
       try {
         const parsedUser = JSON.parse(userFromCookie);
         setUser(parsedUser);
         setIsAdmin(parsedUser?.role === "admin");
+        // Token is inside the user object
         setToken(parsedUser?.token || tokenFromCookie);
+        console.log("Token extracted:", parsedUser?.token);
       } catch (e) {
         console.error("Failed to parse user cookie:", e);
         setToken(tokenFromCookie);
@@ -60,11 +72,7 @@ function SignalDetailsContent() {
   }, []);
 
   useEffect(() => {
-    if (!id) {
-      setError("No signal ID provided");
-      setLoading(false);
-      return;
-    }
+    if (!id) return;
 
     const fetchSignal = async () => {
       try {
@@ -86,8 +94,10 @@ function SignalDetailsContent() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log("File selected:", file);
     if (!file) return;
 
+    console.log("Token:", token);
     if (!token) {
       setModalConfig({
         isOpen: true,
@@ -101,14 +111,24 @@ function SignalDetailsContent() {
 
     setUploading(true);
     try {
+      // 1. Get Signature
+      console.log(
+        "Requesting signature from:",
+        `${API_BASE_URL}/cloudinary-signature`
+      );
       const sigRes = await fetch(`${API_BASE_URL}/cloudinary-signature`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("Signature response status:", sigRes.status);
       if (!sigRes.ok) {
+        const errorText = await sigRes.text();
+        console.error("Signature error:", errorText);
         throw new Error("Failed to get upload signature");
       }
       const { timestamp, signature, cloudName, apiKey } = await sigRes.json();
+      console.log("Got signature:", { timestamp, cloudName, apiKey });
 
+      // 2. Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", file);
       formData.append("api_key", apiKey);
@@ -116,6 +136,7 @@ function SignalDetailsContent() {
       formData.append("signature", signature);
       formData.append("folder", "fx-signals");
 
+      console.log("Uploading to Cloudinary...");
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         {
@@ -123,10 +144,14 @@ function SignalDetailsContent() {
           body: formData,
         }
       );
+      console.log("Upload response status:", uploadRes.status);
       const uploadData = await uploadRes.json();
+      console.log("Upload data:", uploadData);
       if (!uploadRes.ok)
         throw new Error(uploadData.error?.message || "Upload failed");
 
+      // 3. Save to Backend
+      console.log("Saving to backend...");
       const saveRes = await fetch(`${API_BASE_URL}/signals/${id}/screenshot`, {
         method: "POST",
         headers: {
@@ -138,13 +163,19 @@ function SignalDetailsContent() {
           publicId: uploadData.public_id,
         }),
       });
+      console.log("Save response status:", saveRes.status);
 
       if (!saveRes.ok) {
+        const errorText = await saveRes.text();
+        console.error("Save error:", errorText);
         throw new Error("Failed to save screenshot reference");
       }
 
+      console.log("Success! Reloading...");
+      // Reload signal
       window.location.reload();
     } catch (err) {
+      console.error("Upload error:", err);
       setModalConfig({
         isOpen: true,
         type: "alert",
@@ -234,6 +265,7 @@ function SignalDetailsContent() {
   }
 
   const isBuy = signal.direction === "BUY";
+  const accentColor = isBuy ? "emerald" : "rose";
   const accentText = isBuy ? "text-emerald-400" : "text-rose-400";
   const accentBg = isBuy ? "bg-emerald-500/10" : "bg-rose-500/10";
   const accentBorder = isBuy ? "border-emerald-500/20" : "border-rose-500/20";
@@ -441,6 +473,9 @@ function SignalDetailsContent() {
             )}
           </div>
         </div>
+
+        {/* Technical Analysis */}
+        {/* Placeholder for future expansion of Technical Details */}
       </div>
 
       {/* Modal */}
@@ -499,19 +534,5 @@ function TargetRow({
         <div className="text-xs text-gray-500">+{pips.toFixed(1)} pips</div>
       </div>
     </div>
-  );
-}
-
-export default function SignalDetailsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-black text-white flex items-center justify-center">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      }
-    >
-      <SignalDetailsContent />
-    </Suspense>
   );
 }

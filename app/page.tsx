@@ -4,10 +4,19 @@ import { useState, useEffect, useMemo } from "react";
 import { SignalsResponse, Signal } from "./types";
 import StatsCard from "./components/StatsCard";
 import SignalCard from "./components/SignalCard";
+import AuthGuard from "./components/AuthGuard";
 
 import { API_BASE_URL } from "./config";
 
 export default function AdminPage() {
+  return (
+    <AuthGuard>
+      <AdminPageContent />
+    </AuthGuard>
+  );
+}
+
+function AdminPageContent() {
   const [data, setData] = useState<SignalsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
