@@ -18,7 +18,7 @@ export default function SignalCard({ signal, index }: SignalCardProps) {
 
   return (
     <Link
-      href={`/signals/${signal._id}`}
+      href={`/signal-details?id=${signal._id}`}
       className="block group relative rounded-3xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-all duration-300 hover:shadow-2xl hover:shadow-black/50 overflow-hidden cursor-pointer"
     >
       {/* Decorative gradient blob */}
