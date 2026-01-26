@@ -3,10 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_SIGNOVA_API_URL ||
-  "https://signova-server.onrender.com";
+import { API_BASE_URL } from "../config";
 
 interface YoutubeVideo {
   _id: string;
