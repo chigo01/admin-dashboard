@@ -132,6 +132,12 @@ function AdminPageContent() {
               </span>
             )}
           </button>
+          <a
+            href="/youtube"
+            className="px-6 py-4 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold text-lg hover:from-red-600 hover:to-orange-600 transition-all duration-300 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+          >
+            📺 YouTube
+          </a>
         </div>
 
         {/* Error State */}
