@@ -189,6 +189,16 @@ function SignalDetailsContent() {
   };
 
   const handleApprove = async () => {
+    if (!token) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Authentication Required",
+        message: "Please login to approve screenshots",
+        confirmText: "OK",
+      });
+      return;
+    }
     setModalConfig({
       isOpen: true,
       type: "confirm",
@@ -213,6 +223,16 @@ function SignalDetailsContent() {
   };
 
   const handleDeny = async () => {
+    if (!token) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Authentication Required",
+        message: "Please login to deny screenshots",
+        confirmText: "OK",
+      });
+      return;
+    }
     setModalConfig({
       isOpen: true,
       type: "prompt",

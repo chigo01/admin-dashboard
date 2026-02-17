@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";
 import { API_BASE_URL } from "../config";
+import Cookies from "js-cookie";
 
 interface YoutubeVideo {
   _id: string;
@@ -59,16 +60,26 @@ function YoutubePageContent() {
   );
 
   const getAuthToken = () => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("admin_token");
+    if (typeof window === "undefined") return null;
+    return Cookies.get("token") || null;
+  };
+
+  const requireAuthToken = () => {
+    const token = getAuthToken();
+    if (!token) {
+      setError("Session expired. Please log in again.");
     }
-    return null;
+    return token;
   };
 
   const fetchVideos = async () => {
     try {
       setLoading(true);
-      const token = getAuthToken();
+      const token = requireAuthToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/youtube/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -101,7 +112,8 @@ function YoutubePageContent() {
     try {
       setSubmitting(true);
       setError(null);
-      const token = getAuthToken();
+      const token = requireAuthToken();
+      if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/youtube`, {
         method: "POST",
@@ -134,7 +146,8 @@ function YoutubePageContent() {
     if (!confirm("Are you sure you want to delete this video?")) return;
 
     try {
-      const token = getAuthToken();
+      const token = requireAuthToken();
+      if (!token) return;
       const response = await fetch(`${API_BASE_URL}/youtube/${id}`, {
         method: "DELETE",
         headers: {
@@ -154,7 +167,8 @@ function YoutubePageContent() {
 
   const handleToggleActive = async (video: YoutubeVideo) => {
     try {
-      const token = getAuthToken();
+      const token = requireAuthToken();
+      if (!token) return;
       const response = await fetch(`${API_BASE_URL}/youtube/${video._id}`, {
         method: "PUT",
         headers: {

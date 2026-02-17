@@ -21,7 +21,7 @@ function AdminPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"approved" | "pending">(
-    "approved"
+    "approved",
   );
 
   // Filter signals by screenshot approval status
@@ -30,7 +30,7 @@ function AdminPageContent() {
     // Only signals with valid screenshots AND approved status
     return data.signals.filter(
       (signal) =>
-        signal.screenshot?.url && signal.screenshot.isApproved === true
+        signal.screenshot?.url && signal.screenshot.isApproved === true,
     );
   }, [data?.signals]);
 
@@ -39,7 +39,7 @@ function AdminPageContent() {
     // Only signals with valid screenshots AND pending status
     return data.signals.filter(
       (signal) =>
-        signal.screenshot?.url && signal.screenshot.isApproved === false
+        signal.screenshot?.url && signal.screenshot.isApproved === false,
     );
   }, [data?.signals]);
 
@@ -57,7 +57,7 @@ function AdminPageContent() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/top5-refined-signals`);
+      const response = await fetch(`${API_BASE_URL}/top5-refined`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch signals: ${response.statusText}`);
@@ -72,7 +72,7 @@ function AdminPageContent() {
       setData(result);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
+        err instanceof Error ? err.message : "An unknown error occurred",
       );
       console.error("Error fetching signals:", err);
     } finally {
@@ -347,7 +347,7 @@ function AdminPageContent() {
                               {reason.count}
                             </span>
                           </div>
-                        )
+                        ),
                       )}
                     </div>
                   )}
