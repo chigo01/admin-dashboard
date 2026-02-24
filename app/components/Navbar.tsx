@@ -101,6 +101,7 @@ export default function Navbar() {
               <NavLink href="/?category=crypto">Crypto</NavLink>
               <NavLink href="/?category=gold">Gold</NavLink>
               <NavLink href="/?category=stocks">Stocks</NavLink>
+              <NavLink href="/history">History</NavLink>
             </div>
           )}
         </div>
@@ -227,6 +228,12 @@ export default function Navbar() {
                 onClick={() => setIsOpen(false)}
               >
                 Stocks
+              </MobileNavLink>
+              <MobileNavLink
+                href="/history"
+                onClick={() => setIsOpen(false)}
+              >
+                History
               </MobileNavLink>
 
               <hr className="border-white/10" />

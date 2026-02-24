@@ -1,4 +1,5 @@
 // Type definitions for FX Signals Admin Panel
+export type TradeOutcome = "PENDING" | "TP_HIT" | "SL_HIT";
 
 export interface Signal {
   _id?: string;
@@ -27,6 +28,10 @@ export interface Signal {
   timestamp?: string;
   timeframe?: string;
   strength?: number;
+  tradeOutcome?: TradeOutcome;
+  tradeOutcomeUpdatedAt?: string;
+  tradeOutcomeUpdatedBy?: string;
+  tradeOutcomeNote?: string;
 }
 
 export interface Stats {
@@ -59,5 +64,23 @@ export interface SignalsResponse {
   stats: Stats;
   marketSummary?: MarketSummary;
   filteringSummary?: FilteringSummary;
+  error?: string;
+}
+
+export interface ApprovedHistoryItem {
+  date: string;
+  sourceCollection: "Top5Refined" | "SignalResponse";
+  signal: Signal;
+}
+
+export interface ApprovedHistoryResponse {
+  success: boolean;
+  items: ApprovedHistoryItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
   error?: string;
 }
