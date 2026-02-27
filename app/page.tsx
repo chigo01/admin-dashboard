@@ -24,19 +24,18 @@ function AdminPageContent() {
     "approved",
   );
 
-  // Filter signals by screenshot approval status
+  // Filter signals by approval status
   const approvedSignals = useMemo(() => {
     if (!data?.signals) return [];
-    // Only signals with valid screenshots AND approved status
+    // Approved signals can exist with or without an uploaded screenshot
     return data.signals.filter(
-      (signal) =>
-        signal.screenshot?.url && signal.screenshot.isApproved === true,
+      (signal) => signal.screenshot?.isApproved === true,
     );
   }, [data?.signals]);
 
   const pendingSignals = useMemo(() => {
     if (!data?.signals) return [];
-    // Only signals with valid screenshots AND pending status
+    // Pending review only applies to uploaded screenshots
     return data.signals.filter(
       (signal) =>
         signal.screenshot?.url && signal.screenshot.isApproved === false,

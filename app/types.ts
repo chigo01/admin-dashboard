@@ -16,8 +16,8 @@ export interface Signal {
     riskRewardRatio: number | null;
   };
   screenshot?: {
-    url: string;
-    publicId: string;
+    url?: string;
+    publicId?: string;
     isApproved: boolean;
     submittedAt?: string;
     approvedAt?: string;

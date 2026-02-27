@@ -285,10 +285,18 @@ function SignalDetailsContent() {
   }
 
   const isBuy = signal.direction === "BUY";
-  const accentColor = isBuy ? "emerald" : "rose";
   const accentText = isBuy ? "text-emerald-400" : "text-rose-400";
   const accentBg = isBuy ? "bg-emerald-500/10" : "bg-rose-500/10";
   const accentBorder = isBuy ? "border-emerald-500/20" : "border-rose-500/20";
+  const hasScreenshotUrl = Boolean(signal.screenshot?.url);
+  const isScreenshotApproved = signal.screenshot?.isApproved === true;
+  const isApprovedWithoutScreenshot = isScreenshotApproved && !hasScreenshotUrl;
+  const showScreenshotStatus = hasScreenshotUrl || isApprovedWithoutScreenshot;
+  const screenshotStatusLabel = isScreenshotApproved
+    ? hasScreenshotUrl
+      ? "Approved"
+      : "Approved (No Screenshot)"
+    : "Pending Review";
 
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8 font-sans">
@@ -422,28 +430,28 @@ function SignalDetailsContent() {
             <div className="flex items-center gap-2">
               <span>📸</span> Screenshot Proof
             </div>
-            {signal.screenshot && signal.screenshot.url ? (
+            {showScreenshotStatus ? (
               <div
                 className={`px-3 py-1 text-xs rounded-full border ${
-                  signal.screenshot.isApproved
+                  isScreenshotApproved
                     ? "bg-green-500/10 border-green-500/20 text-green-400"
                     : "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
                 }`}
               >
-                {signal.screenshot.isApproved ? "Approved" : "Pending Review"}
+                {screenshotStatusLabel}
               </div>
             ) : null}
           </h2>
 
           <div className="p-6 rounded-3xl bg-zinc-900/30 border border-white/5 min-h-[200px] flex items-center justify-center relative group">
-            {signal.screenshot && signal.screenshot.url ? (
+            {hasScreenshotUrl ? (
               <div className="w-full relative">
                 <img
-                  src={signal.screenshot.url}
+                  src={signal.screenshot?.url}
                   alt="Trading Screenshot"
                   className="w-full rounded-xl border border-white/10"
                 />
-                {isAdmin && !signal.screenshot.isApproved && (
+                {isAdmin && !isScreenshotApproved && (
                   <div className="absolute top-4 right-4 flex gap-2">
                     <button
                       onClick={handleApprove}
@@ -459,8 +467,8 @@ function SignalDetailsContent() {
                     </button>
                   </div>
                 )}
-                {!signal.screenshot.isApproved &&
-                  signal.screenshot.rejectionReason && (
+                {!isScreenshotApproved &&
+                  signal.screenshot?.rejectionReason && (
                     <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
                       <strong>Rejected:</strong>{" "}
                       {signal.screenshot.rejectionReason}
@@ -476,17 +484,29 @@ function SignalDetailsContent() {
                 ) : (
                   <div>
                     <p className="text-gray-500 mb-4">
-                      No screenshot uploaded yet
+                      {isApprovedWithoutScreenshot
+                        ? "This signal is approved without a screenshot."
+                        : "No screenshot uploaded yet"}
                     </p>
-                    <label className="cursor-pointer px-6 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors inline-block">
-                      Upload Screenshot
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleFileSelect}
-                      />
-                    </label>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      {isAdmin && !isScreenshotApproved && (
+                        <button
+                          onClick={handleApprove}
+                          className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full transition-colors"
+                        >
+                          Approve Without Screenshot
+                        </button>
+                      )}
+                      <label className="cursor-pointer px-6 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors inline-block">
+                        Upload Screenshot
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleFileSelect}
+                        />
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
