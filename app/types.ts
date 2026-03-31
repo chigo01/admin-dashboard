@@ -32,38 +32,78 @@ export interface Signal {
   tradeOutcomeUpdatedAt?: string;
   tradeOutcomeUpdatedBy?: string;
   tradeOutcomeNote?: string;
+  newsValidation?: {
+    pair?: string;
+    query?: string;
+    providersUsed?: Array<string | unknown>;
+    summary?: string;
+    classification?: string;
+    articles?: Array<{
+      provider?: string;
+      source?: string;
+      title?: string;
+      description?: string;
+      url?: string;
+      publishedAt?: string;
+      _id?: string;
+    }>;
+  };
+  technicalIndicators?: {
+    macd?: {
+      line: number;
+      signal: number;
+      histogram: number;
+    };
+    movingAverages?: {
+      sma20: number;
+      sma50: number;
+      ema12: number;
+      ema26: number;
+    };
+    bollinger?: {
+      upper: number;
+      middle: number;
+      lower: number;
+    };
+    stochastic?: {
+      k: number;
+      d: number;
+    };
+    rsi?: number;
+  };
+  supportResistance?: {
+    resistance: number[];
+    support: number[];
+    currentLevel: string;
+  };
+  aiAnalysis?: {
+    gpt?: {
+      model?: string;
+      analysis?: string;
+    };
+    claude?: {
+      model?: string;
+      analysis?: string;
+    };
+  };
 }
 
 export interface Stats {
-  totalGenerated: number;
-  passedRiskFilter: number;
-  top5Selected: number;
-  filterPassRate: string;
-  rejectedCount: number;
-}
-
-export interface MarketSummary {
-  bullishSignals?: number;
-  bearishSignals?: number;
-  neutralSignals?: number;
-  averageConfidence?: number;
-}
-
-export interface FilteringSummary {
-  totalRejected: number;
-  commonRejectionReasons: Array<{
-    reason: string;
-    count: number;
-  }>;
+  actionableSignalCount: number;
+  pairNewsCoverage: number;
+  totalNewsArticles: number;
+  newsProviders: string[];
+  generatedAt: string;
 }
 
 export interface SignalsResponse {
   success: boolean;
   date: string;
+  gptTop5: Signal[];
+  claudeBest5: Signal[];
+  claudeWorst5: Signal[];
   signals: Signal[];
   stats: Stats;
-  marketSummary?: MarketSummary;
-  filteringSummary?: FilteringSummary;
   error?: string;
 }
 

@@ -24,10 +24,18 @@ function AdminPageContent() {
     "approved",
   );
 
+  const modelCollections = useMemo(
+    () => [
+      { label: "Model 1", signals: data?.gptTop5 ?? [] },
+      { label: "Model 2", signals: data?.claudeBest5 ?? [] },
+      { label: "Model 3", signals: data?.claudeWorst5 ?? [] },
+    ],
+    [data],
+  );
+
   // Filter signals by approval status
   const approvedSignals = useMemo(() => {
     if (!data?.signals) return [];
-    // Approved signals can exist with or without an uploaded screenshot
     return data.signals.filter(
       (signal) => signal.screenshot?.isApproved === true,
     );
@@ -35,17 +43,9 @@ function AdminPageContent() {
 
   const pendingSignals = useMemo(() => {
     if (!data?.signals) return [];
-    // Pending review only applies to uploaded screenshots
     return data.signals.filter(
-      (signal) =>
-        signal.screenshot?.url && signal.screenshot.isApproved === false,
+      (signal) => signal.screenshot?.isApproved === false,
     );
-  }, [data?.signals]);
-
-  const signalsWithoutScreenshots = useMemo(() => {
-    if (!data?.signals) return [];
-    // Signals that don't have a valid screenshot submitted
-    return data.signals.filter((signal) => !signal.screenshot?.url);
   }, [data?.signals]);
 
   const currentSignals =
@@ -185,60 +185,37 @@ function AdminPageContent() {
         {/* Data Display */}
         {data && !loading && (
           <div className="space-y-12 animate-fade-in-up">
-            {/* Top Section: Stats & Market Summary */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1">
-                <StatsCard stats={data.stats} date={data.date} />
-              </div>
-
-              {/* Market Summary */}
-              {data.marketSummary && (
-                <div className="lg:col-span-2 rounded-3xl bg-zinc-900/50 p-8 border border-white/5 hover:border-white/10 transition-colors duration-300">
-                  <div className="flex items-center gap-3 mb-8">
-                    <span className="text-2xl">🌍</span>
-                    <h2 className="text-2xl font-bold text-white tracking-tight">
-                      Market Sentiment
-                    </h2>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                    <SummaryItem
-                      label="Bullish"
-                      value={data.marketSummary.bullishSignals}
-                      color="green"
-                    />
-                    <SummaryItem
-                      label="Bearish"
-                      value={data.marketSummary.bearishSignals}
-                      color="red"
-                    />
-                    <SummaryItem
-                      label="Neutral"
-                      value={data.marketSummary.neutralSignals}
-                      color="gray"
-                    />
-                    <SummaryItem
-                      label="Avg Confidence"
-                      value={`${(
-                        (data.marketSummary.averageConfidence || 0) * 100
-                      ).toFixed(0)}%`}
-                      color="purple"
-                    />
-                  </div>
-                </div>
-              )}
+            <div className="grid grid-cols-1 gap-8">
+              <StatsCard stats={data.stats} date={data.date} />
             </div>
 
-            {/* Signals Grid with Tabs */}
             <div>
               <div className="flex items-center gap-4 mb-8">
                 <div className="h-8 w-1 bg-white rounded-full"></div>
                 <h2 className="text-3xl font-bold text-white tracking-tight">
-                  Trading Signals
+                  Refined Models
                 </h2>
               </div>
 
-              {/* Tabs */}
+              <div className="space-y-10">
+                {modelCollections.map((collection) => (
+                  <ModelSection
+                    key={collection.label}
+                    title={collection.label}
+                    signals={collection.signals}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-8 w-1 bg-white rounded-full"></div>
+                <h2 className="text-3xl font-bold text-white tracking-tight">
+                  Signal Reviews
+                </h2>
+              </div>
+
               <div className="flex gap-4 mb-6">
                 <TabButton
                   active={activeTab === "approved"}
@@ -254,7 +231,6 @@ function AdminPageContent() {
                 />
               </div>
 
-              {/* Display current tab signals */}
               {currentSignals.length === 0 ? (
                 <div className="text-center py-20 rounded-3xl bg-zinc-900/30 border border-white/5 border-dashed">
                   <span className="text-6xl mb-6 block opacity-50">📭</span>
@@ -269,7 +245,6 @@ function AdminPageContent() {
                   {currentSignals.map((signal, index) => (
                     <div key={signal._id || index} className="relative">
                       <SignalCard signal={signal} index={index} />
-                      {/* Screenshot status badge */}
                       {signal.screenshot && (
                         <div className="absolute top-4 right-4 z-10">
                           <div
@@ -291,71 +266,49 @@ function AdminPageContent() {
                 </div>
               )}
             </div>
-
-            {/* Signals without screenshots */}
-            {signalsWithoutScreenshots.length > 0 && (
-              <div className="mt-12">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="h-8 w-1 bg-gray-500 rounded-full"></div>
-                  <h2 className="text-3xl font-bold text-white tracking-tight">
-                    All Signals
-                  </h2>
-                  <span className="px-3 py-1 rounded-full bg-gray-500/10 text-xs font-medium text-gray-400 border border-gray-500/10">
-                    {signalsWithoutScreenshots.length} Signals
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {signalsWithoutScreenshots.map((signal, index) => (
-                    <SignalCard
-                      key={signal._id || index}
-                      signal={signal}
-                      index={index}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Filtering Summary */}
-            {data.filteringSummary &&
-              data.filteringSummary.totalRejected > 0 && (
-                <div className="rounded-3xl bg-zinc-900/30 p-8 border border-white/5">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-300 flex items-center gap-3">
-                      <span className="text-2xl">🔍</span>
-                      Filtering Analysis
-                    </h2>
-                    <span className="px-4 py-2 rounded-full bg-red-500/10 text-red-400 text-sm font-medium border border-red-500/10">
-                      {data.filteringSummary.totalRejected} Rejected
-                    </span>
-                  </div>
-
-                  {data.filteringSummary.commonRejectionReasons.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {data.filteringSummary.commonRejectionReasons.map(
-                        (reason, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between p-4 rounded-xl bg-black/40 border border-white/5 hover:border-white/10 transition-colors"
-                          >
-                            <span className="text-gray-400 text-sm">
-                              {reason.reason}
-                            </span>
-                            <span className="px-3 py-1 rounded-lg bg-zinc-800 text-white text-xs font-bold">
-                              {reason.count}
-                            </span>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function ModelSection({
+  title,
+  signals,
+}: {
+  title: string;
+  signals: Signal[];
+}) {
+  return (
+    <section className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-2xl font-bold text-white tracking-tight">
+            {title}
+          </h3>
+          <span className="px-3 py-1 rounded-full bg-white/5 text-xs font-medium text-gray-300 border border-white/10">
+            {signals.length} signals
+          </span>
+        </div>
+      </div>
+
+      {signals.length === 0 ? (
+        <div className="text-center py-14 rounded-3xl bg-zinc-900/30 border border-white/5 border-dashed text-gray-500">
+          No signals available.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {signals.map((signal, index) => (
+            <SignalCard
+              key={`${title}-${signal._id || `${signal.pair}-${index}`}`}
+              signal={signal}
+              index={index}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -388,35 +341,5 @@ function TabButton({
         {count}
       </span>
     </button>
-  );
-}
-
-function SummaryItem({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number | string | undefined;
-  color: string;
-}) {
-  if (value === undefined) return null;
-
-  const colorStyles = {
-    green: "text-emerald-400 bg-emerald-500/5 border-emerald-500/10",
-    red: "text-rose-400 bg-rose-500/5 border-rose-500/10",
-    gray: "text-gray-300 bg-gray-500/5 border-gray-500/10",
-    purple: "text-purple-400 bg-purple-500/5 border-purple-500/10",
-  }[color];
-
-  return (
-    <div
-      className={`flex flex-col items-center justify-center p-6 rounded-2xl border ${colorStyles} transition-transform hover:scale-105 duration-300`}
-    >
-      <span className="text-3xl font-bold mb-2 tracking-tight">{value}</span>
-      <span className="text-xs uppercase tracking-widest opacity-60 font-medium">
-        {label}
-      </span>
-    </div>
   );
 }

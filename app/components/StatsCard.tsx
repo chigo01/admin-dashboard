@@ -6,6 +6,9 @@ interface StatsCardProps {
 }
 
 export default function StatsCard({ stats, date }: StatsCardProps) {
+  const providerCount = stats.newsProviders?.length ?? 0;
+  const displayDate = stats.generatedAt || date;
+
   return (
     <div className="h-full rounded-3xl bg-zinc-900/50 p-6 md:p-8 border border-white/5 hover:border-white/10 transition-colors duration-300 flex flex-col">
       <div className="mb-8">
@@ -13,7 +16,7 @@ export default function StatsCard({ stats, date }: StatsCardProps) {
           Signal Statistics
         </h2>
         <p className="text-sm text-gray-500 font-mono">
-          {new Date(date).toLocaleString(undefined, {
+          {new Date(displayDate).toLocaleString(undefined, {
             dateStyle: "medium",
             timeStyle: "short",
           })}
@@ -22,34 +25,34 @@ export default function StatsCard({ stats, date }: StatsCardProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 grow">
         <StatItem
-          label="Total Scanned"
-          value={stats.totalGenerated}
-          subtext="Raw Signals"
+          label="Actionable"
+          value={stats.actionableSignalCount}
+          subtext="Tradable Signals"
         />
         <StatItem
-          label="Passed Risk"
-          value={stats.passedRiskFilter}
-          subtext="Safety Check"
+          label="News Coverage"
+          value={stats.pairNewsCoverage}
+          subtext="Pairs Covered"
         />
         <StatItem
-          label="Selected"
-          value={stats.top5Selected}
-          subtext="Top Performers"
+          label="Articles"
+          value={stats.totalNewsArticles}
+          subtext="News Validations"
           highlight
         />
         <StatItem
-          label="Pass Rate"
-          value={stats.filterPassRate}
-          subtext="Quality Control"
+          label="Providers"
+          value={providerCount}
+          subtext="News Sources"
         />
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
         <span className="text-xs text-gray-500 uppercase tracking-wider">
-          Rejection Rate
+          Active Providers
         </span>
-        <span className="text-sm font-mono text-red-400">
-          {((stats.rejectedCount / stats.totalGenerated) * 100).toFixed(1)}%
+        <span className="text-sm font-mono text-emerald-400">
+          {stats.newsProviders?.join(", ") || "N/A"}
         </span>
       </div>
     </div>
