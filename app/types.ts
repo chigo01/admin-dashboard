@@ -86,6 +86,7 @@ export interface Signal {
       analysis?: string;
     };
   };
+  isCustom?: boolean;
 }
 
 export interface Stats {
@@ -102,6 +103,7 @@ export interface SignalsResponse {
   gptTop5: Signal[];
   claudeBest5: Signal[];
   claudeWorst5: Signal[];
+  customSignals?: Signal[];
   signals: Signal[];
   stats: Stats;
   error?: string;

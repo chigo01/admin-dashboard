@@ -98,6 +98,7 @@ function AdminPageContent() {
             </p>
           </div>
 
+          <div className="flex items-center gap-4">
           <button
             onClick={fetchSignals}
             disabled={loading}
@@ -137,6 +138,13 @@ function AdminPageContent() {
           >
             📺 YouTube
           </a>
+          <a
+            href="/custom-signal"
+            className="px-6 py-4 rounded-full bg-white/5 text-white font-bold text-lg border border-white/10 hover:bg-white/10 transition-all duration-300"
+          >
+            + Add Custom Signal
+          </a>
+          </div>
         </div>
 
         {/* Error State */}
@@ -188,6 +196,29 @@ function AdminPageContent() {
             <div className="grid grid-cols-1 gap-8">
               <StatsCard stats={data.stats} date={data.date} />
             </div>
+
+            {data.customSignals && data.customSignals.length > 0 && (
+              <div>
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="h-8 w-1 bg-white rounded-full"></div>
+                  <h2 className="text-3xl font-bold text-white tracking-tight">
+                    Custom Signals
+                  </h2>
+                  <span className="px-3 py-1 rounded-full bg-white/5 text-xs font-medium text-gray-300 border border-white/10">
+                    {data.customSignals.length} signals
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {data.customSignals.map((signal, index) => (
+                    <SignalCard
+                      key={signal._id || `custom-${index}`}
+                      signal={signal}
+                      index={index}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <div className="flex items-center gap-4 mb-8">

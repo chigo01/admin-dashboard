@@ -6,6 +6,7 @@ import Cookies from "js-cookie";
 import { Signal } from "../../types";
 import { API_BASE_URL } from "../../config";
 import Modal from "../../components/Modal";
+import EditSignalModal from "../../components/EditSignalModal";
 import AuthGuard from "../../components/AuthGuard";
 import TradingViewChart from "../../components/TradingViewChart";
 
@@ -27,6 +28,7 @@ function SignalDetailsContent() {
   const [token, setToken] = useState<string | undefined>();
   const [user, setUser] = useState<any>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const id = params?.id as string;
 
   // Modal state
@@ -303,26 +305,37 @@ function SignalDetailsContent() {
     <div className="min-h-screen bg-black text-white p-4 md:p-8 font-sans">
       <div className="mx-auto space-y-8">
         {/* Navigation */}
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className="w-5 h-5"
+        <div className="flex items-center justify-between gap-4">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-            />
-          </svg>
-          Back to Signals
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+              />
+            </svg>
+            Back to Signals
+          </button>
+
+          {isAdmin && token && signal.direction !== "HOLD" && (
+            <button
+              onClick={() => setIsEditOpen(true)}
+              className="px-6 py-2.5 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors text-sm"
+            >
+              Edit Prices
+            </button>
+          )}
+        </div>
 
         {/* Header Card */}
         <div className="relative overflow-hidden rounded-3xl bg-zinc-900/50 border border-white/5 p-8">
@@ -362,7 +375,7 @@ function SignalDetailsContent() {
         </div>
 
         {/* Price Levels Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <PriceCard
             label="Entry Price"
             value={signal.entryPrice}
@@ -371,6 +384,11 @@ function SignalDetailsContent() {
           <PriceCard
             label="Take Profit 1"
             value={signal.exitTargets.takeProfit1}
+            color="text-emerald-400"
+          />
+          <PriceCard
+            label="Take Profit 2"
+            value={signal.exitTargets.takeProfit2}
             color="text-emerald-400"
           />
           <PriceCard
@@ -538,6 +556,18 @@ function SignalDetailsContent() {
         confirmText={modalConfig.confirmText}
         placeholder={modalConfig.placeholder}
       />
+
+      {/* Edit Signal Modal */}
+      {isEditOpen && token && (
+        <EditSignalModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          signal={signal}
+          token={token}
+          apiBaseUrl={API_BASE_URL}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }
@@ -557,7 +587,7 @@ function PriceCard({
         {label}
       </span>
       <span className={`text-2xl font-mono font-bold ${color}`}>
-        {value.toFixed(5)}
+        {value}
       </span>
     </div>
   );
