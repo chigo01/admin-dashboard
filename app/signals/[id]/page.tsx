@@ -7,6 +7,7 @@ import { Signal } from "../../types";
 import { API_BASE_URL } from "../../config";
 import Modal from "../../components/Modal";
 import AuthGuard from "../../components/AuthGuard";
+import TradingViewChart from "../../components/TradingViewChart";
 
 export default function SignalDetailsPage() {
   return (
@@ -377,6 +378,14 @@ function SignalDetailsContent() {
             value={signal.exitTargets.stopLoss}
             color="text-rose-400"
           />
+        </div>
+
+        {/* Price Action Chart */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <span>📈</span> Price Action ({signal.pair} · {signal.timeframe})
+          </h2>
+          <TradingViewChart signal={signal} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
