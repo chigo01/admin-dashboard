@@ -23,9 +23,11 @@ const RESOLUTION_TO_MS: Record<string, number> = {
 };
 
 const LIVE_POLL_MS = 3000;
-
-type Subscription = { intervalId: number; lastBarTime: number };
-const subscriptions: Map<string, Subscription> = new Map();
+// After this many same-time onTick pushes without a real new bar, escalate to
+// onResetCacheNeededCallback() — forces TradingView to refetch via getBars and
+// redraw. Works around the library's tendency to dedupe same-time updates
+// (notably on daily resolution).
+const STALE_TICK_RESET_THRESHOLD = 2;
 
 interface CandleBar {
   time: number;
@@ -35,6 +37,13 @@ interface CandleBar {
   close: number;
   volume?: number;
 }
+
+type Subscription = {
+  intervalId: number;
+  lastBar: CandleBar | null;
+  staleTicks: number;
+};
+const subscriptions: Map<string, Subscription> = new Map();
 
 interface CandlesResponse {
   status: string;
@@ -155,7 +164,7 @@ export function createDatafeed(pair: string) {
       resolution: string,
       onTick: (bar: CandleBar) => void,
       listenerGuid: string,
-      _onResetCache: () => void
+      onResetCacheNeededCallback: () => void
     ) {
       const timeframe = RESOLUTION_TO_TIMEFRAME[resolution];
       const stepMs = RESOLUTION_TO_MS[resolution];
@@ -166,7 +175,7 @@ export function createDatafeed(pair: string) {
       const existing = subscriptions.get(listenerGuid);
       if (existing) window.clearInterval(existing.intervalId);
 
-      const sub: Subscription = { intervalId: 0, lastBarTime: 0 };
+      const sub: Subscription = { intervalId: 0, lastBar: null, staleTicks: 0 };
 
       const poll = async () => {
         if (typeof document !== "undefined" && document.hidden) return;
@@ -181,17 +190,62 @@ export function createDatafeed(pair: string) {
           const data: CandlesResponse = await res.json();
           const last = data.bars?.[data.bars.length - 1];
           if (!last) return;
-          // Push if it's a new bar or the current bar's values moved.
-          if (last.time >= sub.lastBarTime) {
-            sub.lastBarTime = last.time;
-            onTick({
-              time: last.time,
-              open: last.open,
-              high: last.high,
-              low: last.low,
-              close: last.close,
-              volume: last.volume,
-            });
+
+          const prev = sub.lastBar;
+          const isNewBar = !prev || last.time > prev.time;
+          const isSameBarChanged =
+            !!prev &&
+            last.time === prev.time &&
+            (last.open !== prev.open ||
+              last.high !== prev.high ||
+              last.low !== prev.low ||
+              last.close !== prev.close ||
+              last.volume !== prev.volume);
+
+          if (!isNewBar && !isSameBarChanged) return; // nothing to push
+
+          // Fresh object every time — defensive against any reference-equality
+          // dedup inside TradingView's reconciler.
+          const tick: CandleBar = {
+            time: last.time,
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close,
+            volume: last.volume,
+          };
+          sub.lastBar = tick;
+
+          if (process.env.NODE_ENV !== "production") {
+            console.debug(
+              "[tv-datafeed] onTick",
+              symbolInfo.name,
+              timeframe,
+              isNewBar ? "new-bar" : "same-bar",
+              tick
+            );
+          }
+          onTick(tick);
+
+          if (isNewBar) {
+            sub.staleTicks = 0;
+          } else {
+            sub.staleTicks += 1;
+            // Escalation: TradingView silently dedupes some same-time onTick
+            // updates (esp. daily). After a few such pushes, ask the library
+            // to invalidate its cache and re-fetch via getBars — guaranteed
+            // visible redraw.
+            if (sub.staleTicks >= STALE_TICK_RESET_THRESHOLD) {
+              sub.staleTicks = 0;
+              if (process.env.NODE_ENV !== "production") {
+                console.debug("[tv-datafeed] resetCache", symbolInfo.name, timeframe);
+              }
+              try {
+                onResetCacheNeededCallback();
+              } catch {
+                // ignore — TradingView will recover on the next poll
+              }
+            }
           }
         } catch {
           // Transient network errors are silent — chart keeps its last bar.
