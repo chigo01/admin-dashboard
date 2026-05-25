@@ -12,6 +12,21 @@ const RESOLUTION_TO_TIMEFRAME: Record<string, string> = {
   "1D": "daily",
 };
 
+const RESOLUTION_TO_MS: Record<string, number> = {
+  "1": 60_000,
+  "5": 300_000,
+  "15": 900_000,
+  "30": 1_800_000,
+  "60": 3_600_000,
+  "240": 14_400_000,
+  "1D": 86_400_000,
+};
+
+const LIVE_POLL_MS = 3000;
+
+type Subscription = { intervalId: number; lastBarTime: number };
+const subscriptions: Map<string, Subscription> = new Map();
+
 interface CandleBar {
   time: number;
   open: number;
@@ -136,17 +151,65 @@ export function createDatafeed(pair: string) {
     },
 
     subscribeBars(
-      _symbolInfo: unknown,
-      _resolution: string,
-      _onTick: (bar: CandleBar) => void,
-      _listenerGuid: string,
+      symbolInfo: { name: string },
+      resolution: string,
+      onTick: (bar: CandleBar) => void,
+      listenerGuid: string,
       _onResetCache: () => void
     ) {
-      // No realtime streaming for admin historical review.
+      const timeframe = RESOLUTION_TO_TIMEFRAME[resolution];
+      const stepMs = RESOLUTION_TO_MS[resolution];
+      if (!timeframe || !stepMs) return;
+
+      // Tear down any prior subscription with the same guid (TradingView may
+      // reuse guids across resolution changes without calling unsubscribe).
+      const existing = subscriptions.get(listenerGuid);
+      if (existing) window.clearInterval(existing.intervalId);
+
+      const sub: Subscription = { intervalId: 0, lastBarTime: 0 };
+
+      const poll = async () => {
+        if (typeof document !== "undefined" && document.hidden) return;
+        const toMs = Date.now();
+        const fromMs = toMs - stepMs * 5;
+        const url = `${API_BASE_URL}/candles?pair=${encodeURIComponent(symbolInfo.name)}&timeframe=${timeframe}&from=${fromMs}&to=${toMs}&_=${toMs}`;
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) return;
+          // Guard against late responses after unsubscribe.
+          if (subscriptions.get(listenerGuid) !== sub) return;
+          const data: CandlesResponse = await res.json();
+          const last = data.bars?.[data.bars.length - 1];
+          if (!last) return;
+          // Push if it's a new bar or the current bar's values moved.
+          if (last.time >= sub.lastBarTime) {
+            sub.lastBarTime = last.time;
+            onTick({
+              time: last.time,
+              open: last.open,
+              high: last.high,
+              low: last.low,
+              close: last.close,
+              volume: last.volume,
+            });
+          }
+        } catch {
+          // Transient network errors are silent — chart keeps its last bar.
+        }
+      };
+
+      sub.intervalId = window.setInterval(poll, LIVE_POLL_MS);
+      subscriptions.set(listenerGuid, sub);
+      // Kick off an immediate tick so the chart goes live without waiting.
+      poll();
     },
 
-    unsubscribeBars(_listenerGuid: string) {
-      // No-op (no active subscriptions).
+    unsubscribeBars(listenerGuid: string) {
+      const sub = subscriptions.get(listenerGuid);
+      if (sub) {
+        window.clearInterval(sub.intervalId);
+        subscriptions.delete(listenerGuid);
+      }
     },
   };
 }
