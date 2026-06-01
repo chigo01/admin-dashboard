@@ -17,6 +17,7 @@ type FormState = {
   takeProfit1: string;
   takeProfit2: string;
   stopLoss: string;
+  reasoning: string;
 };
 
 function toInitialState(signal: Signal): FormState {
@@ -25,6 +26,7 @@ function toInitialState(signal: Signal): FormState {
     takeProfit1: String(signal.exitTargets?.takeProfit1 ?? ""),
     takeProfit2: String(signal.exitTargets?.takeProfit2 ?? ""),
     stopLoss: String(signal.exitTargets?.stopLoss ?? ""),
+    reasoning: (signal.reasoning ?? []).join("\n"),
   };
 }
 
@@ -93,7 +95,7 @@ export default function EditSignalModal({
         : "HOLD signals cannot be edited";
 
   const handleChange = (field: keyof FormState) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
 
@@ -126,6 +128,11 @@ export default function EditSignalModal({
       return;
     }
 
+    const reasoning = form.reasoning
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -141,6 +148,7 @@ export default function EditSignalModal({
             takeProfit1,
             takeProfit2,
             stopLoss,
+            reasoning,
           }),
         }
       );
@@ -171,7 +179,7 @@ export default function EditSignalModal({
           if (e.key === "Escape" && !submitting) onClose();
         }}
       >
-        <h2 className="text-xl font-bold text-white mb-1">Edit Price Levels</h2>
+        <h2 className="text-xl font-bold text-white mb-1">Edit Signal</h2>
         <p className="text-gray-400 text-sm mb-4">
           {signal.pair} · {signal.direction}
         </p>
@@ -200,6 +208,13 @@ export default function EditSignalModal({
             label="Stop Loss"
             value={form.stopLoss}
             onChange={handleChange("stopLoss")}
+            disabled={submitting}
+          />
+          <TextAreaField
+            label="AI Reasoning"
+            hint="one point per line"
+            value={form.reasoning}
+            onChange={handleChange("reasoning")}
             disabled={submitting}
           />
         </div>
@@ -255,6 +270,36 @@ function Field({
         onChange={onChange}
         disabled={disabled}
         className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all disabled:opacity-50"
+      />
+    </label>
+  );
+}
+
+function TextAreaField({
+  label,
+  hint,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs uppercase tracking-widest text-gray-500 mb-1.5">
+        {label}
+        {hint && <span className="ml-2 normal-case tracking-normal text-gray-600">({hint})</span>}
+      </span>
+      <textarea
+        rows={4}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm leading-relaxed focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all disabled:opacity-50 resize-y"
       />
     </label>
   );
