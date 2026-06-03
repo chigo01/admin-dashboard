@@ -102,6 +102,9 @@ export default function Navbar() {
               <NavLink href="/?category=gold">Gold</NavLink>
               <NavLink href="/?category=stocks">Stocks</NavLink>
               <NavLink href="/history">History</NavLink>
+              {user?.role === "admin" && (
+                <NavLink href="/approval-requests">Approvals</NavLink>
+              )}
             </div>
           )}
         </div>
@@ -235,6 +238,14 @@ export default function Navbar() {
               >
                 History
               </MobileNavLink>
+              {user?.role === "admin" && (
+                <MobileNavLink
+                  href="/approval-requests"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Approvals
+                </MobileNavLink>
+              )}
 
               <hr className="border-white/10" />
             </>

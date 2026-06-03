@@ -115,6 +115,31 @@ export interface ApprovedHistoryItem {
   signal: Signal;
 }
 
+export type ApprovalRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface ApprovalRequest {
+  _id: string;
+  signalId: string;
+  signalSnapshot: Partial<Signal>;
+  requestedBy: {
+    userId: string;
+    username?: string;
+    email?: string;
+  };
+  status: ApprovalRequestStatus;
+  rejectionReason?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ApprovalRequestsResponse {
+  success: boolean;
+  data: ApprovalRequest[];
+  error?: string;
+}
+
 export interface ApprovedHistoryResponse {
   success: boolean;
   items: ApprovedHistoryItem[];

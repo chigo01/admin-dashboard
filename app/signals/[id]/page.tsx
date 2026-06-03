@@ -265,6 +265,72 @@ function SignalDetailsContent() {
     });
   };
 
+  const handleRequestApproval = async () => {
+    if (!token) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Authentication Required",
+        message: "Please login to request approval",
+        confirmText: "OK",
+      });
+      return;
+    }
+    setModalConfig({
+      isOpen: true,
+      type: "confirm",
+      title: "Request Approval",
+      message:
+        "Send this signal to the admin approval queue? All admins will be notified.",
+      confirmText: "Request",
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/approval-requests`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ signalId: id }),
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok) {
+            setModalConfig({
+              isOpen: true,
+              type: "alert",
+              title: "Request Sent",
+              message:
+                "Your approval request has been submitted. Admins have been notified.",
+              confirmText: "OK",
+            });
+          } else if (res.status === 409) {
+            setModalConfig({
+              isOpen: true,
+              type: "alert",
+              title: "Already Requested",
+              message:
+                data?.message ||
+                "Approval has already been requested for this signal.",
+              confirmText: "OK",
+            });
+          } else {
+            throw new Error(data?.error || "Failed to submit request");
+          }
+        } catch (err) {
+          setModalConfig({
+            isOpen: true,
+            type: "alert",
+            title: "Request Failed",
+            message:
+              err instanceof Error ? err.message : "Failed to submit request",
+            confirmText: "OK",
+          });
+        }
+      },
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -327,14 +393,24 @@ function SignalDetailsContent() {
             Back to Signals
           </button>
 
-          {isAdmin && token && signal.direction !== "HOLD" && (
-            <button
-              onClick={() => setIsEditOpen(true)}
-              className="px-6 py-2.5 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors text-sm"
-            >
-              Edit Prices
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {!isAdmin && token && !isScreenshotApproved && (
+              <button
+                onClick={handleRequestApproval}
+                className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full transition-colors text-sm"
+              >
+                Request Approval
+              </button>
+            )}
+            {isAdmin && token && signal.direction !== "HOLD" && (
+              <button
+                onClick={() => setIsEditOpen(true)}
+                className="px-6 py-2.5 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors text-sm"
+              >
+                Edit Prices
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Header Card */}
