@@ -399,7 +399,7 @@ function SignalDetailsContent() {
                 onClick={handleRequestApproval}
                 className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full transition-colors text-sm"
               >
-                Request Approval
+                Send to Approval Queue
               </button>
             )}
             {isAdmin && token && signal.direction !== "HOLD" && (
