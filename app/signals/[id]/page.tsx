@@ -265,6 +265,41 @@ function SignalDetailsContent() {
     });
   };
 
+  const handleUnapprove = async () => {
+    if (!token) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Authentication Required",
+        message: "Please login to unapprove screenshots",
+        confirmText: "OK",
+      });
+      return;
+    }
+    setModalConfig({
+      isOpen: true,
+      type: "confirm",
+      title: "Unapprove Signal",
+      message:
+        "Revert approval? The signal will return to Pending Review and disappear from approved feeds.",
+      confirmText: "Unapprove",
+      onConfirm: async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/signals/${id}/screenshot/unapprove`,
+            {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (res.ok) window.location.reload();
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
+  };
+
   const handleRequestApproval = async () => {
     if (!token) {
       setModalConfig({
@@ -570,6 +605,16 @@ function SignalDetailsContent() {
                     </button>
                   </div>
                 )}
+                {isAdmin && isScreenshotApproved && (
+                  <div className="absolute top-4 right-4">
+                    <button
+                      onClick={handleUnapprove}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-lg font-bold text-sm"
+                    >
+                      Unapprove
+                    </button>
+                  </div>
+                )}
                 {!isScreenshotApproved &&
                   signal.screenshot?.rejectionReason && (
                     <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
@@ -598,6 +643,14 @@ function SignalDetailsContent() {
                           className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full transition-colors"
                         >
                           Approve Without Screenshot
+                        </button>
+                      )}
+                      {isAdmin && isScreenshotApproved && (
+                        <button
+                          onClick={handleUnapprove}
+                          className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition-colors"
+                        >
+                          Unapprove
                         </button>
                       )}
                       <label className="cursor-pointer px-6 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors inline-block">
