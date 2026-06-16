@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../config";
+import { searchPairs } from "./supportedPairs";
 
 const SUPPORTED_RESOLUTIONS = ["1", "5", "15", "30", "60", "240", "1D"] as const;
 
@@ -68,12 +69,12 @@ export function createDatafeed(pair: string) {
     },
 
     searchSymbols(
-      _userInput: string,
+      userInput: string,
       _exchange: string,
       _symbolType: string,
       onResult: (items: unknown[]) => void
     ) {
-      onResult([]);
+      onResult(searchPairs(userInput));
     },
 
     resolveSymbol(
