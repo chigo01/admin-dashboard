@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Cookies from "js-cookie";
 import { SignalsResponse, Signal } from "./types";
 import StatsCard from "./components/StatsCard";
 import SignalCard from "./components/SignalCard";
 import AuthGuard from "./components/AuthGuard";
+import Modal from "./components/Modal";
 
 import { API_BASE_URL } from "./config";
 
@@ -23,6 +25,42 @@ function AdminPageContent() {
   const [activeTab, setActiveTab] = useState<"approved" | "pending">(
     "approved",
   );
+  const [token, setToken] = useState<string | undefined>();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+
+  // Modal state (mirrors the signal detail page pattern)
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    type: "alert" | "confirm" | "prompt";
+    title: string;
+    message?: string;
+    onConfirm?: (value?: string) => void;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    type: "alert",
+    title: "",
+  });
+
+  const closeModal = () => {
+    setModalConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  // Read auth cookies on the client to authorize admin-only actions
+  useEffect(() => {
+    const tokenFromCookie = Cookies.get("token");
+    const userFromCookie = Cookies.get("user");
+    setToken(tokenFromCookie);
+    if (userFromCookie) {
+      try {
+        const parsed = JSON.parse(userFromCookie);
+        setIsAdmin(parsed?.role === "admin");
+      } catch {
+        setIsAdmin(false);
+      }
+    }
+  }, []);
 
   const modelCollections = useMemo(
     () => [
@@ -83,6 +121,64 @@ function AdminPageContent() {
   useEffect(() => {
     fetchSignals();
   }, []);
+
+  // Revert a mistakenly-approved signal back to Pending Review.
+  // Reuses the existing admin-server endpoint (same as the detail page's unapprove).
+  const handleRevert = (signalId: string) => {
+    if (!token) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Authentication Required",
+        message: "Please login as an admin to revert approvals.",
+        confirmText: "OK",
+      });
+      return;
+    }
+    setModalConfig({
+      isOpen: true,
+      type: "confirm",
+      title: "Revert Approval",
+      message:
+        "Revert approval? This signal returns to Pending Review and disappears from approved feeds.",
+      confirmText: "Revert",
+      onConfirm: async () => {
+        setRevertingId(signalId);
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/signals/${signalId}/screenshot/unapprove`,
+            {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+          if (res.ok) {
+            await fetchSignals();
+          } else {
+            const data = await res.json().catch(() => ({}));
+            setModalConfig({
+              isOpen: true,
+              type: "alert",
+              title: "Revert Failed",
+              message: data?.error || `Failed to revert (${res.status}).`,
+              confirmText: "OK",
+            });
+          }
+        } catch (err) {
+          setModalConfig({
+            isOpen: true,
+            type: "alert",
+            title: "Revert Failed",
+            message:
+              err instanceof Error ? err.message : "Failed to revert approval",
+            confirmText: "OK",
+          });
+        } finally {
+          setRevertingId(null);
+        }
+      },
+    });
+  };
 
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8 font-sans selection:bg-white/20">
@@ -292,6 +388,24 @@ function AdminPageContent() {
                           </div>
                         </div>
                       )}
+                      {activeTab === "approved" &&
+                        isAdmin &&
+                        signal._id &&
+                        signal.screenshot?.isApproved && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleRevert(signal._id!);
+                            }}
+                            disabled={revertingId === signal._id}
+                            className="absolute bottom-4 right-4 z-10 px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 font-bold text-xs disabled:opacity-50 transition-colors backdrop-blur-sm"
+                          >
+                            {revertingId === signal._id
+                              ? "Reverting…"
+                              : "↩ Revert"}
+                          </button>
+                        )}
                     </div>
                   ))}
                 </div>
@@ -300,6 +414,16 @@ function AdminPageContent() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={modalConfig.isOpen}
+        onClose={closeModal}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        onConfirm={modalConfig.onConfirm}
+      />
     </div>
   );
 }
