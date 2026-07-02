@@ -94,7 +94,15 @@ function AdminPageContent() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/top5-refined`);
+      // Read-only projection: never triggers the LLM/market pipeline or a
+      // Discord re-send. Do NOT switch this to /top5-refined — that endpoint
+      // recomputes (and can re-post to Discord) on a cache miss.
+      // Read the cookie directly rather than the `token` state var: this can
+      // run before the auth-cookie effect above has set state on first mount.
+      const authToken = Cookies.get("token");
+      const response = await fetch(`${API_BASE_URL}/top5-refined-signals`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch signals: ${response.statusText}`);
