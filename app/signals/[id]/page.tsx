@@ -79,7 +79,16 @@ function SignalDetailsContent() {
 
     const fetchSignal = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/signals/${id}`);
+        // GET /signals/:id is admin-only (serviceSecretOrAdmin), so the
+        // request must carry the admin JWT or it 401s. Read the cookie
+        // directly rather than the `token` state var: this effect can run
+        // before the auth-cookie effect above has set state on first mount.
+        const authToken = Cookies.get("token");
+        const response = await fetch(`${API_BASE_URL}/signals/${id}`, {
+          headers: authToken
+            ? { Authorization: `Bearer ${authToken}` }
+            : undefined,
+        });
         if (!response.ok) {
           throw new Error("Signal not found");
         }
