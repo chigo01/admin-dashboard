@@ -103,6 +103,7 @@ export interface SignalsResponse {
   gptTop5: Signal[];
   claudeBest5: Signal[];
   claudeWorst5: Signal[];
+  engineBest5?: Signal[];
   customSignals?: Signal[];
   signals: Signal[];
   stats: Stats;

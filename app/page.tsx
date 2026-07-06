@@ -67,6 +67,7 @@ function AdminPageContent() {
       { label: "Model 1", signals: data?.gptTop5 ?? [] },
       { label: "Model 2", signals: data?.claudeBest5 ?? [] },
       { label: "Model 3", signals: data?.claudeWorst5 ?? [] },
+      { label: "Model 4", signals: data?.engineBest5 ?? [] },
     ],
     [data],
   );
