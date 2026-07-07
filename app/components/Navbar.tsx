@@ -105,6 +105,9 @@ export default function Navbar() {
               {user?.role === "admin" && (
                 <NavLink href="/approval-requests">Approvals</NavLink>
               )}
+              {user?.role === "admin" && (
+                <NavLink href="/manual-email">Email Users</NavLink>
+              )}
             </div>
           )}
         </div>
@@ -244,6 +247,14 @@ export default function Navbar() {
                   onClick={() => setIsOpen(false)}
                 >
                   Approvals
+                </MobileNavLink>
+              )}
+              {user?.role === "admin" && (
+                <MobileNavLink
+                  href="/manual-email"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Email Users
                 </MobileNavLink>
               )}
 

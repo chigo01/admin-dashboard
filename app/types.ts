@@ -152,3 +152,30 @@ export interface ApprovedHistoryResponse {
   };
   error?: string;
 }
+
+export interface ManualEmailUser {
+  email: string;
+  name?: string;
+}
+
+export interface ManualEmailUsersResponse {
+  ok: boolean;
+  users: ManualEmailUser[];
+  total: number;
+  page: number;
+  message?: string;
+}
+
+export interface ManualEmailRecipientResult {
+  email: string;
+  status: "sent" | "failed";
+  error?: string;
+}
+
+export interface ManualEmailSendResponse {
+  ok: boolean;
+  sent: number;
+  failed: number;
+  recipients: ManualEmailRecipientResult[];
+  message?: string;
+}
