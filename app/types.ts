@@ -179,3 +179,40 @@ export interface ManualEmailSendResponse {
   recipients: ManualEmailRecipientResult[];
   message?: string;
 }
+
+export interface ManualEmailPreviewResponse {
+  ok: boolean;
+  subject: string;
+  html: string;
+  message?: string;
+}
+
+export type ManualEmailJobStatus = "queued" | "in_progress" | "completed" | "failed";
+
+export interface ManualEmailJob {
+  jobId: string;
+  status: ManualEmailJobStatus;
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  subject: string;
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface ManualEmailBroadcastResponse extends ManualEmailJob {
+  ok: boolean;
+  message?: string;
+}
+
+export interface ManualEmailJobResponse extends ManualEmailJob {
+  ok: boolean;
+  message?: string;
+}
+
+export interface ManualEmailJobsListResponse {
+  ok: boolean;
+  jobs: ManualEmailJob[];
+  message?: string;
+}
