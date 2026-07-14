@@ -10,6 +10,14 @@ import Modal from "./components/Modal";
 
 import { API_BASE_URL } from "./config";
 
+interface GenerateFreshSignalsResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  elapsedSeconds?: number;
+  signals?: Signal[];
+}
+
 export default function AdminPage() {
   return (
     <AuthGuard>
@@ -28,6 +36,7 @@ function AdminPageContent() {
   const [token, setToken] = useState<string | undefined>();
   const [isAdmin, setIsAdmin] = useState(false);
   const [revertingId, setRevertingId] = useState<string | null>(null);
+  const [generatingFresh, setGeneratingFresh] = useState(false);
 
   // Modal state (mirrors the signal detail page pattern)
   const [modalConfig, setModalConfig] = useState<{
@@ -131,6 +140,81 @@ function AdminPageContent() {
     fetchSignals();
   }, []);
 
+  const handleGenerateFresh = () => {
+    if (!token || !isAdmin) {
+      setModalConfig({
+        isOpen: true,
+        type: "alert",
+        title: "Admin Access Required",
+        message: "Please sign in as an admin to regenerate signals.",
+        confirmText: "OK",
+      });
+      return;
+    }
+
+    setModalConfig({
+      isOpen: true,
+      type: "confirm",
+      title: "Regenerate Today’s Signals?",
+      message:
+        "This replaces today’s cached signals and their approval or screenshot state with a fresh market run, then sends the new Models 1–3 report to Discord. Generation may take a few minutes.",
+      confirmText: "Regenerate",
+      onConfirm: async () => {
+        setGeneratingFresh(true);
+        setError(null);
+
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/signals/generate-fresh`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            },
+          );
+          const result = (await response.json().catch(() => ({}))) as
+            GenerateFreshSignalsResponse;
+
+          if (!response.ok || !result.success) {
+            throw new Error(
+              result.error || `Signal regeneration failed (${response.status}).`,
+            );
+          }
+
+          await fetchSignals();
+
+          const generatedCount = result.signals?.length ?? 0;
+          const duration =
+            typeof result.elapsedSeconds === "number"
+              ? ` in ${result.elapsedSeconds.toFixed(1)} seconds`
+              : "";
+          setModalConfig({
+            isOpen: true,
+            type: "alert",
+            title: "Signals Regenerated",
+            message: `${generatedCount} fresh signal${generatedCount === 1 ? "" : "s"} generated${duration} and sent to Discord.`,
+            confirmText: "Done",
+          });
+        } catch (err) {
+          setModalConfig({
+            isOpen: true,
+            type: "alert",
+            title: "Regeneration Failed",
+            message:
+              err instanceof Error
+                ? err.message
+                : "Failed to regenerate signals.",
+            confirmText: "OK",
+          });
+        } finally {
+          setGeneratingFresh(false);
+        }
+      },
+    });
+  };
+
   // Revert a mistakenly-approved signal back to Pending Review.
   // Reuses the existing admin-server endpoint (same as the detail page's unapprove).
   const handleRevert = (signalId: string) => {
@@ -203,52 +287,54 @@ function AdminPageContent() {
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-          <button
-            onClick={fetchSignals}
-            disabled={loading}
-            className="group relative w-full md:w-auto px-8 py-4 rounded-full bg-white text-black font-bold text-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-            {loading ? (
-              <span className="flex items-center justify-center gap-3">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Analyzing Market...
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-3">
-                <span className="text-xl">⚡</span>
-                Generate Signals
-              </span>
+          <div className="flex flex-wrap items-center gap-4">
+            {isAdmin && (
+              <button
+                onClick={handleGenerateFresh}
+                disabled={generatingFresh || loading}
+                className="group relative w-full md:w-auto px-8 py-4 rounded-full bg-white text-black font-bold text-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                {generatingFresh ? (
+                  <span className="flex items-center justify-center gap-3">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Regenerating…
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-3">
+                    <span className="text-xl">⚡</span>
+                    Regenerate Signals
+                  </span>
+                )}
+              </button>
             )}
-          </button>
-          <a
-            href="/youtube"
-            className="px-6 py-4 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold text-lg hover:from-red-600 hover:to-orange-600 transition-all duration-300 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]"
-          >
-            📺 YouTube
-          </a>
-          <a
-            href="/custom-signal"
-            className="px-6 py-4 rounded-full bg-white/5 text-white font-bold text-lg border border-white/10 hover:bg-white/10 transition-all duration-300"
-          >
-            + Add Custom Signal
-          </a>
+            <a
+              href="/youtube"
+              className="px-6 py-4 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold text-lg hover:from-red-600 hover:to-orange-600 transition-all duration-300 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+            >
+              📺 YouTube
+            </a>
+            <a
+              href="/custom-signal"
+              className="px-6 py-4 rounded-full bg-white/5 text-white font-bold text-lg border border-white/10 hover:bg-white/10 transition-all duration-300"
+            >
+              + Add Custom Signal
+            </a>
           </div>
         </div>
 
