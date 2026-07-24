@@ -110,6 +110,47 @@ export interface SignalsResponse {
   error?: string;
 }
 
+// Model 4's scheduled per-pair analysis. "SCHEDULED" is synthesized by the
+// server for a configured pair that has no run yet on the requested date.
+export type Model4RunStatus =
+  | "SCHEDULED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "EMPTY"
+  | "FAILED";
+
+export interface Model4ScheduledRun {
+  scheduleKey: string;
+  pair: string;
+  analysisTimeWAT: string;
+  status: Model4RunStatus;
+  /** How many Finage setups Claude was given to choose between. */
+  candidateCount: number;
+  newsValidatedCount: number;
+  deliveredCount: number;
+  deliveredSignals: Signal[];
+  /** Claude's own reading of the retrieved articles. */
+  newsClassification: "bullish" | "bearish" | "neutral" | null;
+  newsArticleCount: number;
+  newsProviders: string[];
+  analysisSummary: string | null;
+  noTradeReason: string | null;
+  /** Identifies the run for the approve endpoint; null until the run exists. */
+  batchKey: string | null;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  discordDeliveredAt: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;
+  error: string | null;
+}
+
+export interface Model4RunsResponse {
+  success: boolean;
+  date: string;
+  runs: Model4ScheduledRun[];
+  error?: string;
+}
+
 export interface ApprovedHistoryItem {
   date: string;
   sourceCollection: "Top5Refined" | "SignalResponse";

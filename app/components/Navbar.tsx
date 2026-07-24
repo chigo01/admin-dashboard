@@ -103,6 +103,9 @@ export default function Navbar() {
               <NavLink href="/?category=stocks">Stocks</NavLink>
               <NavLink href="/history">History</NavLink>
               {user?.role === "admin" && (
+                <NavLink href="/model-4">Model 4</NavLink>
+              )}
+              {user?.role === "admin" && (
                 <NavLink href="/approval-requests">Approvals</NavLink>
               )}
               {user?.role === "admin" && (
@@ -241,6 +244,11 @@ export default function Navbar() {
               >
                 History
               </MobileNavLink>
+              {user?.role === "admin" && (
+                <MobileNavLink href="/model-4" onClick={() => setIsOpen(false)}>
+                  Model 4
+                </MobileNavLink>
+              )}
               {user?.role === "admin" && (
                 <MobileNavLink
                   href="/approval-requests"
