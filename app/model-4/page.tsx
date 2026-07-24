@@ -444,7 +444,7 @@ function RunCard({
       {run.analysisSummary && (
         <div className="p-4 rounded-2xl bg-sky-500/5 border border-sky-500/20">
           <p className="text-xs uppercase tracking-widest text-sky-400/70 mb-1">
-            Claude analysis
+            analysis
           </p>
           <p className="text-sm text-sky-100/90">{run.analysisSummary}</p>
         </div>
