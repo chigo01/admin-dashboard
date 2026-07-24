@@ -272,11 +272,6 @@ function Model4Content() {
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
               Model 4 — Scheduled Pairs
             </h1>
-            <p className="text-gray-400 mt-1">
-              Claude analyzes each pair independently from its own Finage setups,
-              price history, and news articles — {deliveredCount} of{" "}
-              {runs.length} delivered on this date.
-            </p>
           </div>
           <div className="flex items-center gap-3">
             <input
