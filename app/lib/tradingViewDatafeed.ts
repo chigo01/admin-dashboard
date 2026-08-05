@@ -2,11 +2,9 @@ import { API_BASE_URL } from "../config";
 import { searchPairs } from "./supportedPairs";
 
 // Live updates use a WebSocket to the admin-server's /ws/candles hub (which
-// proxies Massive's real-time stream). Polling REST /candles is kept only as an
-// automatic fallback when the socket is unavailable.
+// proxies Massive's real-time stream). Polling REST /candles is an automatic
+// safety net whenever the socket is unavailable OR has gone quiet.
 const CANDLES_WS_URL = API_BASE_URL.replace(/^http/, "ws") + "/ws/candles";
-// If the socket doesn't reach "subscribed" within this window, fall back to poll.
-const WS_CONNECT_TIMEOUT_MS = 5000;
 
 const SUPPORTED_RESOLUTIONS = ["1", "5", "15", "30", "60", "240", "1D"] as const;
 
@@ -30,7 +28,20 @@ const RESOLUTION_TO_MS: Record<string, number> = {
   "1D": 86_400_000,
 };
 
-const LIVE_POLL_MS = 3000;
+// Matches the server's 2s cache grid, so concurrent charts polling the same
+// pair share one upstream fetch instead of each triggering their own.
+const LIVE_POLL_MS = 2000;
+// If the socket hasn't produced a bar this soon after connecting, start polling.
+// The socket is kept — it supersedes the poll as soon as it delivers.
+const WS_FIRST_BAR_TIMEOUT_MS = 3500;
+// The hub heartbeats every 25s. Two missed beats means the connection is gone,
+// even if the browser still reports it as OPEN (suspended tabs, dead proxies,
+// captive networks — none of which reliably fire close/error).
+const SOCKET_SILENT_MS = 55_000;
+// How often the watchdog re-checks socket liveness.
+const WATCHDOG_MS = 5000;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 15_000;
 // After this many same-time onTick pushes without a real new bar, escalate to
 // onResetCacheNeededCallback() — forces TradingView to refetch via getBars and
 // redraw. Works around the library's tendency to dedupe same-time updates
@@ -47,37 +58,53 @@ interface CandleBar {
 }
 
 type Subscription = {
-  intervalId: number;
+  pollTimer: number;
+  watchdogTimer: number;
+  reconnectTimer: number;
+  firstBarTimer: number;
   ws: WebSocket | null;
-  connectTimer: number;
-  usingFallbackPoll: boolean;
+  reconnectAttempts: number;
+  polling: boolean;
   closed: boolean;
   lastBar: CandleBar | null;
   staleTicks: number;
+  /** Timestamp of the last frame of any kind from the hub (bar or heartbeat). */
+  lastFrameAt: number;
+  /** Latest liveness mode the hub reported: "stream" | "poll" | "down". */
+  serverMode: string;
+  removeResumeListeners: (() => void) | null;
 };
 
 // Fully release a subscription's timers and socket. Safe to call more than once.
 function teardownSubscription(sub: Subscription) {
   sub.closed = true;
-  if (sub.intervalId) {
-    window.clearInterval(sub.intervalId);
-    sub.intervalId = 0;
-  }
-  if (sub.connectTimer) {
-    window.clearTimeout(sub.connectTimer);
-    sub.connectTimer = 0;
-  }
-  if (sub.ws) {
-    try {
-      sub.ws.onopen = null;
-      sub.ws.onmessage = null;
-      sub.ws.onerror = null;
-      sub.ws.onclose = null;
-      sub.ws.close();
-    } catch {
-      // ignore
-    }
-    sub.ws = null;
+  sub.removeResumeListeners?.();
+  sub.removeResumeListeners = null;
+  window.clearInterval(sub.pollTimer);
+  window.clearInterval(sub.watchdogTimer);
+  window.clearTimeout(sub.reconnectTimer);
+  window.clearTimeout(sub.firstBarTimer);
+  sub.pollTimer = 0;
+  sub.watchdogTimer = 0;
+  sub.reconnectTimer = 0;
+  sub.firstBarTimer = 0;
+  sub.polling = false;
+  detachSocket(sub);
+}
+
+/** Drop the current socket without letting its handlers touch the subscription. */
+function detachSocket(sub: Subscription) {
+  const ws = sub.ws;
+  if (!ws) return;
+  sub.ws = null;
+  try {
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    ws.close();
+  } catch {
+    // ignore
   }
 }
 
@@ -95,6 +122,11 @@ export function createDatafeed(pair: string) {
   // so a module-level map would let an old, disposed widget's late
   // unsubscribe tear down the replacement widget's live subscription.
   const subscriptions: Map<string, Subscription> = new Map();
+
+  // Newest bar handed to the chart by getBars, per symbol+resolution. Seeding
+  // the live subscription from it means the first streamed update is compared
+  // against the real candle instead of being treated as a brand-new bar.
+  const latestHistoryBar: Map<string, CandleBar> = new Map();
 
   return {
     onReady(callback: (config: unknown) => void) {
@@ -195,6 +227,13 @@ export function createDatafeed(pair: string) {
             volume: b.volume,
           }));
 
+        if (periodParams.firstDataRequest && bars.length > 0) {
+          latestHistoryBar.set(
+            `${symbolInfo.name}|${resolution}`,
+            bars[bars.length - 1]
+          );
+        }
+
         onResult(bars, { noData: bars.length === 0 });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown candles error";
@@ -219,15 +258,23 @@ export function createDatafeed(pair: string) {
       if (existing) teardownSubscription(existing);
 
       const sub: Subscription = {
-        intervalId: 0,
+        pollTimer: 0,
+        watchdogTimer: 0,
+        reconnectTimer: 0,
+        firstBarTimer: 0,
         ws: null,
-        connectTimer: 0,
-        usingFallbackPoll: false,
+        reconnectAttempts: 0,
+        polling: false,
         closed: false,
-        lastBar: null,
+        lastBar: latestHistoryBar.get(`${symbolInfo.name}|${resolution}`) ?? null,
         staleTicks: 0,
+        lastFrameAt: 0,
+        serverMode: "",
+        removeResumeListeners: null,
       };
       subscriptions.set(listenerGuid, sub);
+
+      const isCurrent = () => subscriptions.get(listenerGuid) === sub && !sub.closed;
 
       // Apply a candidate latest bar (from WS or poll) to the chart, handling
       // new-bar vs same-bar-changed and the daily resetCache escalation.
@@ -236,7 +283,7 @@ export function createDatafeed(pair: string) {
       // calls unsubscribeBars — escalating on stream ticks kills the live
       // subscription within seconds of connecting.
       const pushBar = (last: CandleBar, allowCacheReset: boolean) => {
-        if (subscriptions.get(listenerGuid) !== sub || sub.closed) return;
+        if (!isCurrent()) return;
         const prev = sub.lastBar;
         const isNewBar = !prev || last.time > prev.time;
         const isSameBarChanged =
@@ -282,91 +329,193 @@ export function createDatafeed(pair: string) {
       };
 
       const poll = async () => {
+        if (!isCurrent()) return;
         if (typeof document !== "undefined" && document.hidden) return;
         const toMs = Date.now();
         const fromMs = toMs - stepMs * 5;
-        const url = `${API_BASE_URL}/candles?pair=${encodeURIComponent(symbolInfo.name)}&timeframe=${timeframe}&from=${fromMs}&to=${toMs}&_=${toMs}`;
+        const url = `${API_BASE_URL}/candles?pair=${encodeURIComponent(symbolInfo.name)}&timeframe=${timeframe}&from=${fromMs}&to=${toMs}`;
         try {
           const res = await fetch(url, { cache: "no-store" });
           if (!res.ok) return;
-          if (subscriptions.get(listenerGuid) !== sub) return;
+          if (!isCurrent()) return;
           const data: CandlesResponse = await res.json();
           const last = data.bars?.[data.bars.length - 1];
           if (last) pushBar(last, true);
         } catch {
-          // Transient network errors are silent — chart keeps its last bar.
+          // Transient network errors are silent — chart keeps its last bar and
+          // the next interval retries.
         }
       };
 
-      // Fallback path: poll REST /candles (cached server-side) when the WS
-      // is unavailable. Idempotent — only one poll loop per subscription.
-      const startFallbackPolling = () => {
-        if (sub.closed || sub.usingFallbackPoll) return;
-        sub.usingFallbackPoll = true;
-        sub.intervalId = window.setInterval(poll, LIVE_POLL_MS);
-        poll();
+      // Safety-net path: poll REST /candles (coalesced server-side) whenever the
+      // socket is not proving itself. Idempotent — one poll loop per subscription.
+      const startPolling = () => {
+        if (sub.closed || sub.polling) return;
+        sub.polling = true;
+        sub.pollTimer = window.setInterval(poll, LIVE_POLL_MS);
+        void poll();
       };
 
-      // Primary path: live WebSocket. Falls back to polling on any failure.
+      const stopPolling = () => {
+        if (!sub.polling) return;
+        sub.polling = false;
+        if (sub.pollTimer) {
+          window.clearInterval(sub.pollTimer);
+          sub.pollTimer = 0;
+        }
+      };
+
+      const scheduleReconnect = () => {
+        if (sub.closed || sub.reconnectTimer) return;
+        const delay = Math.min(
+          RECONNECT_BASE_MS * Math.pow(2, sub.reconnectAttempts),
+          RECONNECT_MAX_MS
+        );
+        sub.reconnectAttempts += 1;
+        sub.reconnectTimer = window.setTimeout(() => {
+          sub.reconnectTimer = 0;
+          connectWs();
+        }, delay);
+      };
+
+      // Primary path: live WebSocket, with polling as the safety net. Any
+      // failure keeps the chart moving via poll AND schedules a reconnect —
+      // a single blip must not downgrade the chart to polling permanently.
       const connectWs = () => {
         if (sub.closed) return;
+        detachSocket(sub);
+
         let ws: WebSocket;
         try {
           ws = new WebSocket(CANDLES_WS_URL);
         } catch {
-          startFallbackPolling();
+          startPolling();
+          scheduleReconnect();
           return;
         }
         sub.ws = ws;
+        sub.lastFrameAt = Date.now();
 
-        // If the socket doesn't subscribe in time, fall back without giving up
-        // the socket entirely (it may still arrive and supersede the poll).
-        sub.connectTimer = window.setTimeout(() => {
-          if (!sub.closed && !sub.usingFallbackPoll) startFallbackPolling();
-        }, WS_CONNECT_TIMEOUT_MS);
+        // If the socket doesn't deliver a bar in time, poll alongside it. The
+        // socket is kept — it supersedes the poll as soon as it starts working.
+        if (sub.firstBarTimer) window.clearTimeout(sub.firstBarTimer);
+        sub.firstBarTimer = window.setTimeout(() => {
+          sub.firstBarTimer = 0;
+          if (!sub.closed) startPolling();
+        }, WS_FIRST_BAR_TIMEOUT_MS);
 
         ws.onopen = () => {
-          if (sub.closed) {
-            try { ws.close(); } catch { /* noop */ }
+          if (sub.ws !== ws || sub.closed) {
+            try {
+              ws.close();
+            } catch {
+              /* noop */
+            }
             return;
           }
-          ws.send(
-            JSON.stringify({ type: "subscribe", pair: symbolInfo.name, timeframe })
-          );
+          sub.lastFrameAt = Date.now();
+          ws.send(JSON.stringify({ type: "subscribe", pair: symbolInfo.name, timeframe }));
         };
 
         ws.onmessage = (event) => {
-          if (sub.closed) return;
-          let msg: { type?: string; bar?: CandleBar; pair?: string; timeframe?: string };
+          if (sub.ws !== ws || sub.closed) return;
+          // Any frame proves the connection is alive, including heartbeats.
+          sub.lastFrameAt = Date.now();
+          sub.reconnectAttempts = 0;
+
+          let msg: {
+            type?: string;
+            bar?: CandleBar;
+            mode?: string;
+            live?: boolean;
+          };
           try {
             msg = JSON.parse(typeof event.data === "string" ? event.data : "");
           } catch {
             return;
           }
+
+          if (msg.type === "heartbeat" || msg.type === "status") {
+            if (typeof msg.mode === "string") sub.serverMode = msg.mode;
+            // The hub tells us when it has no live price source at all. Polling
+            // won't help then, but it costs little and recovers the moment the
+            // provider returns, so keep the net out.
+            if (sub.serverMode === "down") startPolling();
+            return;
+          }
+
           if (msg.type === "bar" && msg.bar) {
-            // Live bar arrived: a working socket supersedes any fallback poll.
-            if (sub.usingFallbackPoll) {
-              window.clearInterval(sub.intervalId);
-              sub.intervalId = 0;
-              sub.usingFallbackPoll = false;
-            }
-            if (sub.connectTimer) {
-              window.clearTimeout(sub.connectTimer);
-              sub.connectTimer = 0;
+            // Live bar arrived: a working socket supersedes the safety-net poll.
+            stopPolling();
+            if (sub.firstBarTimer) {
+              window.clearTimeout(sub.firstBarTimer);
+              sub.firstBarTimer = 0;
             }
             pushBar(msg.bar, false);
           }
         };
 
-        const fallback = () => {
-          if (sub.ws === ws) sub.ws = null;
-          if (!sub.closed) startFallbackPolling();
+        const onDrop = () => {
+          if (sub.ws !== ws || sub.closed) return;
+          sub.ws = null;
+          // Keep the chart updating immediately, and try to get the stream back.
+          startPolling();
+          scheduleReconnect();
         };
-        ws.onerror = fallback;
-        ws.onclose = fallback;
+        ws.onerror = onDrop;
+        ws.onclose = onDrop;
       };
 
+      // A browser WebSocket can look OPEN long after the connection behind it
+      // has died — background tabs, suspended devices, and proxies that drop
+      // the tunnel without a FIN all produce this. Neither onclose nor onerror
+      // fires, so nothing else would ever notice the chart had gone stale.
+      // The hub's heartbeat gives us a positive liveness signal to check.
+      const watchdog = () => {
+        if (!isCurrent()) return;
+        if (typeof document !== "undefined" && document.hidden) return;
+        if (!sub.ws) {
+          // No socket at all: make sure something is keeping the chart alive.
+          startPolling();
+          scheduleReconnect();
+          return;
+        }
+        if (Date.now() - sub.lastFrameAt > SOCKET_SILENT_MS) {
+          startPolling();
+          detachSocket(sub);
+          scheduleReconnect();
+        }
+      };
+      sub.watchdogTimer = window.setInterval(watchdog, WATCHDOG_MS);
+
       connectWs();
+
+      // Always catch up from REST and rebuild the socket when the document is
+      // resumed. `pageshow` also covers back-forward-cache restores, while
+      // `online` covers a network change that did not produce a socket event.
+      const resumeLiveUpdates = () => {
+        if (sub.closed || (typeof document !== "undefined" && document.hidden)) return;
+        void poll();
+        sub.reconnectAttempts = 0;
+        if (sub.reconnectTimer) {
+          window.clearTimeout(sub.reconnectTimer);
+          sub.reconnectTimer = 0;
+        }
+        connectWs();
+      };
+
+      const onVisibilityChange = () => {
+        if (!document.hidden) resumeLiveUpdates();
+      };
+
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      window.addEventListener("pageshow", resumeLiveUpdates);
+      window.addEventListener("online", resumeLiveUpdates);
+      sub.removeResumeListeners = () => {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        window.removeEventListener("pageshow", resumeLiveUpdates);
+        window.removeEventListener("online", resumeLiveUpdates);
+      };
     },
 
     unsubscribeBars(listenerGuid: string) {
