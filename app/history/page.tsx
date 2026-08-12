@@ -18,13 +18,19 @@ const PAGE_SIZE = 20;
 const outcomeStyles: Record<TradeOutcome, string> = {
   PENDING: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
   TP_HIT: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  TP1_HIT: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  TP2_HIT: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   SL_HIT: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  REVIEW_REQUIRED: "bg-amber-500/15 text-amber-300 border-amber-500/30",
 };
 
 const outcomeLabels: Record<TradeOutcome, string> = {
   PENDING: "Pending",
   TP_HIT: "TP Hit",
+  TP1_HIT: "TP1 Hit",
+  TP2_HIT: "TP2 Hit",
   SL_HIT: "SL Hit",
+  REVIEW_REQUIRED: "Needs Review",
 };
 
 export default function HistoryPage() {
@@ -260,9 +266,13 @@ function HistoryPageContent() {
                       </p>
                     </div>
                     <div
-                      className={`px-3 py-1 rounded-full border text-xs font-semibold ${outcomeStyles[outcome]}`}
+                      className={`px-3 py-1 rounded-full border text-xs font-semibold ${
+                        outcomeStyles[outcome] ?? outcomeStyles.PENDING
+                      }`}
                     >
-                      {outcomeLabels[outcome]}
+                      {/* Fall back to the raw value rather than rendering an empty
+                          badge if the server ever adds an outcome this map lacks. */}
+                      {outcomeLabels[outcome] ?? outcome}
                     </div>
                   </div>
 

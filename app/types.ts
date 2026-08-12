@@ -1,5 +1,17 @@
 // Type definitions for FX Signals Admin Panel
-export type TradeOutcome = "PENDING" | "TP_HIT" | "SL_HIT";
+
+// Mirrors TRADE_OUTCOMES in admin-server/src/services/tradeMonitorUtils.ts. The
+// server has always been able to emit all six; declaring only three here meant
+// any other value rendered a blank badge with an undefined class in the history
+// table. REVIEW_REQUIRED in particular is now routine — the trade monitor assigns
+// it to trades that never resolved inside the monitoring window.
+export type TradeOutcome =
+  | "PENDING"
+  | "TP_HIT"
+  | "TP1_HIT"
+  | "TP2_HIT"
+  | "SL_HIT"
+  | "REVIEW_REQUIRED";
 
 export interface Signal {
   _id?: string;
