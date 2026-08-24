@@ -571,7 +571,8 @@ function SignalDetailsContent() {
           </div>
         </div>
 
-        {/* Screenshot Section */}
+        {/* Screenshot Section — Model 4 uses run-level Approve/Reject instead. */}
+        {signal.sourceCollection !== "Model4ScheduledRun" && (
         <div className="space-y-4">
           <h2 className="text-xl font-bold flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -678,6 +679,7 @@ function SignalDetailsContent() {
             )}
           </div>
         </div>
+        )}
 
         {/* Technical Analysis */}
         {/* Placeholder for future expansion of Technical Details */}

@@ -7,11 +7,13 @@ import {
   Model4RunsResponse,
   Model4RunStatus,
   Model4ScheduledRun,
+  Signal,
 } from "../types";
 import { API_BASE_URL } from "../config";
 import AuthGuard from "../components/AuthGuard";
-import SignalCard from "../components/SignalCard";
 import Modal from "../components/Modal";
+import EditSignalModal from "../components/EditSignalModal";
+import TradingViewChart from "../components/TradingViewChart";
 
 const STATUS_STYLES: Record<Model4RunStatus, string> = {
   SCHEDULED: "bg-white/5 border-white/10 text-gray-400",
@@ -266,7 +268,7 @@ function Model4Content() {
 
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8 font-sans">
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-7xl space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
@@ -311,10 +313,12 @@ function Model4Content() {
                 key={run.scheduleKey}
                 run={run}
                 canRun={isAdmin}
+                token={token}
                 running={runningKey === run.scheduleKey}
                 onRun={() => runNow(run)}
                 deciding={decidingKey === run.scheduleKey}
                 onDecide={(approved) => decide(run, approved)}
+                onEdited={fetchRuns}
               />
             ))}
           </div>
@@ -340,31 +344,57 @@ const APPROVAL_STYLES: Record<string, string> = {
   REJECTED: "bg-rose-500/10 border-rose-500/30 text-rose-300",
 };
 
+function withSignalId(signal: Signal): Signal {
+  return {
+    ...signal,
+    _id: signal._id || signal.candidateId,
+  };
+}
+
 function RunCard({
   run,
   canRun,
+  token,
   running,
   onRun,
   deciding,
   onDecide,
+  onEdited,
 }: {
   run: Model4ScheduledRun;
   canRun: boolean;
+  token?: string;
   running: boolean;
   onRun: () => void;
   deciding: boolean;
   onDecide: (approved: boolean) => void;
+  onEdited: () => void;
 }) {
-  const signal = run.deliveredSignals?.[0];
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const rawSignal = run.deliveredSignals?.[0];
+  const signal = rawSignal ? withSignalId(rawSignal) : null;
   const awaitingReview =
     Boolean(signal) && run.approvalStatus !== "APPROVED" && Boolean(run.batchKey);
+  const isBuy = signal?.direction === "BUY";
+  const accentText = isBuy ? "text-emerald-400" : "text-rose-400";
+  const accentBg = isBuy ? "bg-emerald-500/10" : "bg-rose-500/10";
+  const accentBorder = isBuy ? "border-emerald-500/20" : "border-rose-500/20";
 
   return (
-    <section className="rounded-3xl bg-zinc-900/30 border border-white/5 p-6 space-y-5">
+    <section className="rounded-3xl bg-zinc-900/30 border border-white/5 p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">{run.pair}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold tracking-tight">{run.pair}</h2>
+              {signal && (
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold tracking-wider ${accentText} ${accentBg} border ${accentBorder}`}
+                >
+                  {signal.direction}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-500">
               {run.analysisTimeWAT} WAT · {run.scheduleKey}
             </p>
@@ -399,6 +429,14 @@ function RunCard({
         </div>
 
         <div className="flex items-center gap-2">
+          {canRun && signal && signal.direction !== "HOLD" && token && (
+            <button
+              onClick={() => setIsEditOpen(true)}
+              className="px-5 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-gray-200 transition-colors"
+            >
+              Edit Prices
+            </button>
+          )}
           {canRun && awaitingReview && (
             <>
               <button
@@ -421,7 +459,11 @@ function RunCard({
             <button
               onClick={onRun}
               disabled={running}
-              className="px-5 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={`px-5 py-2 rounded-full font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                signal
+                  ? "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+                  : "bg-white text-black hover:bg-gray-200"
+              }`}
             >
               {running ? "Running…" : "Run now"}
             </button>
@@ -480,12 +522,98 @@ function RunCard({
       )}
 
       {signal && (
-        // SignalCard links to /signals/:id, but a scheduled Model 4 signal is a
-        // dry-run engine candidate stored only on this run — it has no
-        // Top5Refined/SignalResponse document to open, so the link is disabled.
-        <div className="[&_a]:pointer-events-none [&_a]:cursor-default">
-          <SignalCard signal={signal} index={0} />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <PriceCard
+              label="Entry Price"
+              value={signal.entryPrice}
+              color="text-white"
+            />
+            <PriceCard
+              label="Take Profit 1"
+              value={signal.exitTargets.takeProfit1}
+              color="text-emerald-400"
+            />
+            <PriceCard
+              label="Take Profit 2"
+              value={signal.exitTargets.takeProfit2}
+              color="text-emerald-400"
+            />
+            <PriceCard
+              label="Stop Loss"
+              value={signal.exitTargets.stopLoss}
+              color="text-rose-400"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <span>📈</span> Price Action ({signal.pair} · {signal.timeframe})
+            </h3>
+            <TradingViewChart signal={signal} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <span>🎯</span> Extended Targets
+              </h3>
+              <div className="p-6 rounded-2xl bg-black/20 border border-white/5 space-y-4">
+                <TargetRow
+                  label="Take Profit 2"
+                  value={signal.exitTargets.takeProfit2}
+                  entry={signal.entryPrice}
+                  color="text-emerald-400"
+                />
+                <div className="h-px bg-white/5" />
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Risk/Reward Ratio</span>
+                  <span className="font-mono text-white">
+                    1:
+                    {signal.riskAssessment?.riskRewardRatio?.toFixed(2) || "N/A"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <span>🧠</span> AI Reasoning
+              </h3>
+              <div className="p-6 rounded-2xl bg-black/20 border border-white/5 h-full">
+                {signal.reasoning && signal.reasoning.length > 0 ? (
+                  <ul className="space-y-3">
+                    {signal.reasoning.map((reason, idx) => (
+                      <li
+                        key={idx}
+                        className="flex gap-3 text-gray-300 text-sm leading-relaxed"
+                      >
+                        <span className="text-purple-400 mt-1">•</span>
+                        {reason}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500">No insight stored.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
+      )}
+
+      {isEditOpen && token && signal && (
+        <EditSignalModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          signal={signal}
+          token={token}
+          apiBaseUrl={API_BASE_URL}
+          onSuccess={() => {
+            setIsEditOpen(false);
+            onEdited();
+          }}
+        />
       )}
     </section>
   );
@@ -496,6 +624,48 @@ function Metric({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-2xl bg-white/[0.03] border border-white/5 px-4 py-3">
       <p className="text-xs uppercase tracking-widest text-gray-500">{label}</p>
       <p className="text-sm font-medium text-white mt-1 truncate">{value}</p>
+    </div>
+  );
+}
+
+function PriceCard({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="p-6 rounded-2xl bg-black/20 border border-white/5 flex flex-col items-center justify-center text-center">
+      <span className="text-xs uppercase tracking-widest text-gray-500 mb-2">
+        {label}
+      </span>
+      <span className={`text-2xl font-mono font-bold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function TargetRow({
+  label,
+  value,
+  entry,
+  color,
+}: {
+  label: string;
+  value: number;
+  entry: number;
+  color: string;
+}) {
+  const pips = Math.abs(value - entry) * (entry > 100 ? 100 : 10000);
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-gray-400">{label}</span>
+      <div className="text-right">
+        <div className={`font-mono font-bold ${color}`}>{value.toFixed(5)}</div>
+        <div className="text-xs text-gray-500">+{pips.toFixed(1)} pips</div>
+      </div>
     </div>
   );
 }

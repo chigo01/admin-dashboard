@@ -99,6 +99,9 @@ export interface Signal {
     };
   };
   isCustom?: boolean;
+  candidateId?: string;
+  batchKey?: string;
+  sourceCollection?: "Top5Refined" | "SignalResponse" | "Model4ScheduledRun";
 }
 
 export interface Stats {
