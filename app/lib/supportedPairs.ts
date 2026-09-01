@@ -1,6 +1,6 @@
 // Curated list of trading pairs the chart can search/compare. Kept to 6-letter
-// symbols so they satisfy the datafeed's resolveSymbol regex (/^[A-Z]{6}$/) and
-// the /candles backend, which serves these via the "Massive" feed.
+// symbols so they satisfy the datafeed's resolveSymbol regex (/^[A-Z]{6}$/).
+// Forex/metals are served by Massive; BTCUSD/ETHUSD by Binance klines.
 
 export interface SupportedPair {
   symbol: string;
@@ -59,13 +59,14 @@ export interface SymbolSearchResult {
 }
 
 function toResult(pair: SupportedPair): SymbolSearchResult {
+  const crypto = /^(BTC|ETH)/.test(pair.symbol);
   return {
     symbol: pair.symbol,
     full_name: pair.symbol,
     description: pair.description,
-    exchange: "Massive",
+    exchange: crypto ? "Binance" : "Massive",
     ticker: pair.symbol,
-    type: "forex",
+    type: crypto ? "crypto" : "forex",
   };
 }
 

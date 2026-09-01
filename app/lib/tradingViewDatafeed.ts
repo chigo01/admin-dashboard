@@ -158,23 +158,24 @@ export function createDatafeed(pair: string) {
     ) {
       const name = (symbolName || pair).toUpperCase();
       if (!/^[A-Z]{6}$/.test(name)) {
-        onError(`Invalid forex symbol: ${symbolName}`);
+        onError(`Invalid symbol: ${symbolName}`);
         return;
       }
 
+      const crypto = /^(BTC|ETH)/.test(name);
       const symbolInfo = {
         name,
         ticker: name,
         full_name: name,
         description: `${name.slice(0, 3)}/${name.slice(3, 6)}`,
-        type: "forex",
+        type: crypto ? "crypto" : "forex",
         session: "24x7",
         exchange: "Massive",
         listed_exchange: "Massive",
         timezone: "Etc/UTC",
         format: "price",
         minmov: 1,
-        pricescale: name.endsWith("JPY") ? 1000 : 100000,
+        pricescale: crypto ? 100 : name.endsWith("JPY") ? 1000 : 100000,
         has_intraday: true,
         has_daily: true,
         has_weekly_and_monthly: false,
